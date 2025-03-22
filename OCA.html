@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overcurrent Relay Coordination Tool V2</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.0/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.1.0/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .settings-panel {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            flex: 1;
+            min-width: 300px;
+        }
+        .chart-container {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            flex: 2;
+            min-width: 600px;
+            height: 650px;
+            position: relative;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .relay-settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .toggle-container label {
+            margin-right: 10px;
+            margin-bottom: 0;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .fault-settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .trip-times {
+            margin-top: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .trip-time {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+        }
+        .trip-time:last-child {
+            border-bottom: none;
+        }
+        .trip-time-label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .trip-time-value {
+            font-size: 14px;
+            font-weight: bold;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            padding: 2px 8px;
+            border-radius: 3px;
+            min-width: 80px;
+            text-align: center;
+        }
+        button {
+            background-color: #0072C6;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+        button:hover {
+            background-color: #005A9E;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+        }
+        #calculate-btn {
+            background-color: #107C10;
+        }
+        #calculate-btn:hover {
+            background-color: #0B5C0B;
+        }
+        #reset-btn {
+            background-color: #D83B01;
+        }
+        #reset-btn:hover {
+            background-color: #A83001;
+        }
+        .upstream {
+            border-left: 4px solid #0066CC;
+        }
+        .incoming {
+            border-left: 4px solid #009933;
+        }
+        .outgoing {
+            border-left: 4px solid #CC0000;
+        }
+        .outgoing2 {
+            border-left: 4px solid #FF6600;
+        }
+        .pickup-unit {
+            font-size: 12px;
+            color: #777;
+            margin-left: 5px;
+        }
+        .btn-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .chart-container canvas {
+            background-color: #FFFFFF;
+            background-image: 
+                linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .sync-btn {
+            background-color: #777;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        .sync-btn:hover {
+            background-color: #555;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+        }
+        .input-group input {
+            flex: 1;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 4px;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .highlighted-field {
+            background-color: #FFEBCC; /* Light orange color */
+        }
+    </style>
+</head>
+<body>
+    <h1 style="color: #333; text-align: center; margin-bottom: 20px; font-weight: bold;">Overcurrent Relay Coordination Tool (V2)</h1>
+    <p>Developed By <a href="https://www.linkedin.com/in/mostafa-neisi/" target="_blank">Mostafa Neisi</a></p>
+    
+    <div class="container">
+        <div class="settings-panel">
+            <div class="tabs">
+                <div class="tab active" data-tab="upstream">Upstream</div>
+                <div class="tab" data-tab="incoming">Incoming</div>
+                <div class="tab" data-tab="outgoing1">Outgoing 1</div>
+                <div class="tab" data-tab="outgoing2">Outgoing 2</div>
+                <div class="tab" data-tab="fault">Fault</div>
+            </div>
+
+            <!-- Upstream Relay Settings -->
+            <div id="upstream-tab" class="tab-content active">
+                <div class="section-title upstream">Upstream Relay Settings</div>
+                <div class="relay-settings">
+                    <div class="form-group">
+                        <label for="upstream-curve">Curve Type</label>
+                        <select id="upstream-curve">
+                            <option value="ANSI E.INV">ANSI E.INV</option>
+                            <option value="ANSI N.INV">ANSI N.INV</option>
+                            <option value="ANSI MOD INV">ANSI MOD INV</option>
+                            <option value="IEC LONG TIME E.I">IEC LONG TIME E.I</option>
+                            <option value="IEC LONG TIME V.I">IEC LONG TIME V.I</option>
+                            <option value="IEC LONG TIME INV">IEC LONG TIME INV</option>
+                            <option value="IEC N.INV">IEC N.INV</option>
+                            <option value="IEC V.INV">IEC V.INV</option>
+                            <option value="IEC INV">IEC INV</option>
+                            <option value="IEC E.INV">IEC E.INV</option>
+                            <option value="IEC SHORT TIME">IEC SHORT TIME</option>
+                            <option value="IEC LONG TIME">IEC LONG TIME</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="upstream-idmt-enabled">IDMT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="upstream-idmt-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-pickup-idmt-sec">Pick-up IDMT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="upstream-pickup-idmt-sec" class="highlighted-field" value="5" min="0.1" step="0.1">
+                            <button class="sync-btn" id="upstream-sync-idmt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-pickup-idmt-pri">Pick-up IDMT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="upstream-pickup-idmt-pri" value="300" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-time-multiplier">Time Multiplier</label>
+                        <input type="number" id="upstream-time-multiplier" value="0.5" min="0.05" max="1" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-min-op-time">Min Op.Del.Time (s)</label>
+                        <input type="number" id="upstream-min-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="upstream-dt-enabled">DT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="upstream-dt-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-pickup-dt-sec">Pick-up DT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="upstream-pickup-dt-sec" class="highlighted-field" value="20" min="0.1" step="0.1">
+                            <button class="sync-btn" id="upstream-sync-dt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-pickup-dt-pri">Pick-up DT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="upstream-pickup-dt-pri" value="1200" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-op-time">Op.Del.Time (s)</label>
+                        <input type="number" id="upstream-op-time" value="0.3" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-ct-primary">CT Primary (A)</label>
+                        <input type="number" id="upstream-ct-primary" class="highlighted-field" value="600" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="upstream-ct-secondary">CT Secondary (A)</label>
+                        <select id="upstream-ct-secondary" class="highlighted-field">
+                            <option value="1">1</option>
+                            <option value="5" selected>5</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Incoming Relay Settings -->
+            <div id="incoming-tab" class="tab-content">
+                <div class="section-title incoming">Incoming Relay Settings</div>
+                <div class="relay-settings">
+                    <div class="form-group">
+                        <label for="incoming-curve">Curve Type</label>
+                        <select id="incoming-curve">
+                            <option value="ANSI E.INV">ANSI E.INV</option>
+                            <option value="ANSI N.INV">ANSI N.INV</option>
+                            <option value="ANSI MOD INV" selected>ANSI MOD INV</option>
+                            <option value="IEC LONG TIME E.I">IEC LONG TIME E.I</option>
+                            <option value="IEC LONG TIME V.I">IEC LONG TIME V.I</option>
+                            <option value="IEC LONG TIME INV">IEC LONG TIME INV</option>
+                            <option value="IEC N.INV">IEC N.INV</option>
+                            <option value="IEC V.INV">IEC V.INV</option>
+                            <option value="IEC INV">IEC INV</option>
+                            <option value="IEC E.INV">IEC E.INV</option>
+                            <option value="IEC SHORT TIME">IEC SHORT TIME</option>
+                            <option value="IEC LONG TIME">IEC LONG TIME</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="incoming-idmt-enabled">IDMT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="incoming-idmt-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-pickup-idmt-sec">Pick-up IDMT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="incoming-pickup-idmt-sec" class="highlighted-field" value="2" min="0.1" step="0.1">
+                            <button class="sync-btn" id="incoming-sync-idmt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-pickup-idmt-pri">Pick-up IDMT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="incoming-pickup-idmt-pri" value="200" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-time-multiplier">Time Multiplier</label>
+                        <input type="number" id="incoming-time-multiplier" value="0.3" min="0.05" max="1" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-min-op-time">Min Op.Del.Time (s)</label>
+                        <input type="number" id="incoming-min-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="incoming-dt-enabled">DT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="incoming-dt-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-pickup-dt-sec">Pick-up DT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="incoming-pickup-dt-sec" class="highlighted-field" value="8" min="0.1" step="0.1">
+                            <button class="sync-btn" id="incoming-sync-dt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-pickup-dt-pri">Pick-up DT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="incoming-pickup-dt-pri" value="800" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-op-time">Op.Del.Time (s)</label>
+                        <input type="number" id="incoming-op-time" value="0.2" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-ct-primary">CT Primary (A)</label>
+                        <input type="number" id="incoming-ct-primary" class="highlighted-field" value="400" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="incoming-ct-secondary">CT Secondary (A)</label>
+                        <select id="incoming-ct-secondary" class="highlighted-field">
+                            <option value="1">1</option>
+                            <option value="5" selected>5</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outgoing 1 Relay Settings -->
+            <div id="outgoing1-tab" class="tab-content">
+                <div class="section-title outgoing">Outgoing 1 Relay Settings</div>
+                <div class="relay-settings">
+                    <div class="form-group">
+                        <label for="outgoing1-curve">Curve Type</label>
+                        <select id="outgoing1-curve">
+                            <option value="ANSI E.INV">ANSI E.INV</option>
+                            <option value="ANSI N.INV">ANSI N.INV</option>
+                            <option value="ANSI MOD INV">ANSI MOD INV</option>
+                            <option value="IEC LONG TIME E.I">IEC LONG TIME E.I</option>
+                            <option value="IEC LONG TIME V.I">IEC LONG TIME V.I</option>
+                            <option value="IEC LONG TIME INV">IEC LONG TIME INV</option>
+                            <option value="IEC N.INV" selected>IEC N.INV</option>
+                            <option value="IEC V.INV">IEC V.INV</option>
+                            <option value="IEC INV">IEC INV</option>
+                            <option value="IEC E.INV">IEC E.INV</option>
+                            <option value="IEC SHORT TIME">IEC SHORT TIME</option>
+                            <option value="IEC LONG TIME">IEC LONG TIME</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="outgoing1-idmt-enabled">IDMT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="outgoing1-idmt-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-pickup-idmt-sec">Pick-up IDMT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing1-pickup-idmt-sec" class="highlighted-field" value="1" min="0.1" step="0.1">
+                            <button class="sync-btn" id="outgoing1-sync-idmt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-pickup-idmt-pri">Pick-up IDMT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing1-pickup-idmt-pri" value="100" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-time-multiplier">Time Multiplier</label>
+                        <input type="number" id="outgoing1-time-multiplier" value="0.1" min="0.05" max="1" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-min-op-time">Min Op.Del.Time (s)</label>
+                        <input type="number" id="outgoing1-min-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="outgoing1-dt-enabled">DT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="outgoing1-dt-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-pickup-dt-sec">Pick-up DT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing1-pickup-dt-sec" class="highlighted-field" value="4" min="0.1" step="0.1">
+                            <button class="sync-btn" id="outgoing1-sync-dt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-pickup-dt-pri">Pick-up DT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing1-pickup-dt-pri" value="400" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-op-time">Op.Del.Time (s)</label>
+                        <input type="number" id="outgoing1-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-ct-primary">CT Primary (A)</label>
+                        <input type="number" id="outgoing1-ct-primary" class="highlighted-field" value="200" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing1-ct-secondary">CT Secondary (A)</label>
+                        <select id="outgoing1-ct-secondary" class="highlighted-field">
+                            <option value="1">1</option>
+                            <option value="5" selected>5</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Outgoing 2 Relay Settings -->
+            <div id="outgoing2-tab" class="tab-content">
+                <div class="section-title outgoing2">Outgoing 2 Relay Settings</div>
+                <div class="relay-settings">
+                    <div class="form-group">
+                        <label for="outgoing2-curve">Curve Type</label>
+                        <select id="outgoing2-curve">
+                            <option value="ANSI E.INV">ANSI E.INV</option>
+                            <option value="ANSI N.INV">ANSI N.INV</option>
+                            <option value="ANSI MOD INV">ANSI MOD INV</option>
+                            <option value="IEC LONG TIME E.I">IEC LONG TIME E.I</option>
+                            <option value="IEC LONG TIME V.I">IEC LONG TIME V.I</option>
+                            <option value="IEC LONG TIME INV">IEC LONG TIME INV</option>
+                            <option value="IEC N.INV">IEC N.INV</option>
+                            <option value="IEC V.INV" selected>IEC V.INV</option>
+                            <option value="IEC INV">IEC INV</option>
+                            <option value="IEC E.INV">IEC E.INV</option>
+                            <option value="IEC SHORT TIME">IEC SHORT TIME</option>
+                            <option value="IEC LONG TIME">IEC LONG TIME</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="outgoing2-idmt-enabled">IDMT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="outgoing2-idmt-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-pickup-idmt-sec">Pick-up IDMT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing2-pickup-idmt-sec" class="highlighted-field" value="1.5" min="0.1" step="0.1">
+                            <button class="sync-btn" id="outgoing2-sync-idmt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-pickup-idmt-pri">Pick-up IDMT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing2-pickup-idmt-pri" value="150" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-time-multiplier">Time Multiplier</label>
+                        <input type="number" id="outgoing2-time-multiplier" value="0.15" min="0.05" max="1" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-min-op-time">Min Op.Del.Time (s)</label>
+                        <input type="number" id="outgoing2-min-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle-container">
+                            <label for="outgoing2-dt-enabled">DT Stage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="outgoing2-dt-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-pickup-dt-sec">Pick-up DT Stage (Secondary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing2-pickup-dt-sec" class="highlighted-field" value="5" min="0.1" step="0.1">
+                            <button class="sync-btn" id="outgoing2-sync-dt">Sync</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-pickup-dt-pri">Pick-up DT Stage (Primary A)</label>
+                        <div class="input-group">
+                            <input type="number" id="outgoing2-pickup-dt-pri" value="500" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-op-time">Op.Del.Time (s)</label>
+                        <input type="number" id="outgoing2-op-time" value="0.1" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-ct-primary">CT Primary (A)</label>
+                        <input type="number" id="outgoing2-ct-primary" class="highlighted-field" value="250" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="outgoing2-ct-secondary">CT Secondary (A)</label>
+                        <select id="outgoing2-ct-secondary" class="highlighted-field">
+                            <option value="1">1</option>
+                            <option value="5" selected>5</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fault Current and Trip Times -->
+            <div id="fault-tab" class="tab-content">
+                <div class="section-title">Fault Current and Trip Times</div>
+                <div class="fault-settings">
+                    <div class="form-group">
+                        <label for="fault-current">Fault Current (A)</label>
+                        <input type="number" id="fault-current" value="1500" min="100" step="100">
+                    </div>
+                    <div class="form-group">
+                        <button id="calculate-btn">Calculate Trip Times</button>
+                    </div>
+                </div>
+                <div class="trip-times">
+                    <div class="trip-time">
+                        <span class="trip-time-label">Upstream Relay Trip Time:</span>
+                        <span class="trip-time-value" id="upstream-trip-time">N/A</span>
+                    </div>
+                    <div class="trip-time">
+                        <span class="trip-time-label">Incoming Relay Trip Time:</span>
+                        <span class="trip-time-value" id="incoming-trip-time">N/A</span>
+                    </div>
+                    <div class="trip-time">
+                        <span class="trip-time-label">Outgoing 1 Relay Trip Time:</span>
+                        <span class="trip-time-value" id="outgoing1-trip-time">N/A</span>
+                    </div>
+                    <div class="trip-time">
+                        <span class="trip-time-label">Outgoing 2 Relay Trip Time:</span>
+                        <span class="trip-time-value" id="outgoing2-trip-time">N/A</span>
+                    </div>
+                </div>
+
+                <div class="btn-container">
+                    <button id="reset-btn">Reset Settings</button>
+                    <button id="reset-zoom-btn">Reset Zoom</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="relay-chart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Relay curve equations
+        const relayEquations = {
+            "ANSI E.INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (28.2 / (Math.pow(ratio, 2) - 1) + 0.1217);
+                return Math.max(t, minTime);
+            },
+            "ANSI N.INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (8.9341 / (Math.pow(ratio, 2) - 1) + 0.17966);
+                return Math.max(t, minTime);
+            },
+            "ANSI MOD INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (0.18 / (Math.pow(ratio, 0.02) - 1) + 5.95);
+                return Math.max(t, minTime);
+            },
+            "IEC LONG TIME E.I": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (120 / (Math.pow(ratio, 2) - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC LONG TIME V.I": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (13.5 / (ratio - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC LONG TIME INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (120 / (ratio - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC N.INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (0.14 / (Math.pow(ratio, 0.02) - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC V.INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (13.5 / (ratio - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (0.14 / (ratio - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC E.INV": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (80 / (Math.pow(ratio, 2) - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC SHORT TIME": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (0.05 / (Math.pow(ratio, 0.04) - 1));
+                return Math.max(t, minTime);
+            },
+            "IEC LONG TIME": (current, pickup, multiplier, minTime) => {
+                const ratio = current / pickup;
+                if (ratio < 1) return null;
+                const t = multiplier * (120 / (ratio - 1));
+                return Math.max(t, minTime);
+            }
+        };
+
+        // Function to calculate trip time based on relay settings and fault current
+        function calculateTripTime(relay, faultCurrent) {
+            const relayData = getRelaySettings(relay);
+            let idmtTripTime = Infinity;
+            let dtTripTime = Infinity;
+
+            // Calculate IDMT Stage trip time if enabled
+            if (relayData.idmtEnabled) {
+                const pickupPrimary = relayData.pickupIDMTPri;
+                const curve = relayData.curve;
+                const multiplier = relayData.timeMultiplier;
+                const minTime = relayData.minOpTime;
+                
+                idmtTripTime = relayEquations[curve](faultCurrent, pickupPrimary, multiplier, minTime);
+                if (idmtTripTime === null) idmtTripTime = Infinity;
+            }
+
+            // Calculate DT Stage trip time if enabled
+            if (relayData.dtEnabled) {
+                const pickupPrimary = relayData.pickupDTPri;
+                const opTime = relayData.opTime;
+                
+                if (faultCurrent >= pickupPrimary) {
+                    dtTripTime = opTime;
+                }
+            }
+
+            // Return the minimum trip time between IDMT and DT stages
+            return Math.min(idmtTripTime, dtTripTime);
+        }
+
+        // Function to get relay settings from form inputs
+        function getRelaySettings(relay) {
+            return {
+                curve: document.getElementById(`${relay}-curve`).value,
+                idmtEnabled: document.getElementById(`${relay}-idmt-enabled`).checked,
+                pickupIDMTPri: parseFloat(document.getElementById(`${relay}-pickup-idmt-pri`).value),
+                pickupIDMTSec: parseFloat(document.getElementById(`${relay}-pickup-idmt-sec`).value),
+                timeMultiplier: parseFloat(document.getElementById(`${relay}-time-multiplier`).value),
+                minOpTime: parseFloat(document.getElementById(`${relay}-min-op-time`).value),
+                dtEnabled: document.getElementById(`${relay}-dt-enabled`).checked,
+                pickupDTPri: parseFloat(document.getElementById(`${relay}-pickup-dt-pri`).value),
+                pickupDTSec: parseFloat(document.getElementById(`${relay}-pickup-dt-sec`).value),
+                opTime: parseFloat(document.getElementById(`${relay}-op-time`).value),
+                ctPrimary: parseFloat(document.getElementById(`${relay}-ct-primary`).value),
+                ctSecondary: parseFloat(document.getElementById(`${relay}-ct-secondary`).value)
+            };
+        }
+
+        // Function to sync primary/secondary values for a specific relay
+        function syncValues(relay, type, direction) {
+            const ctPrimary = parseFloat(document.getElementById(`${relay}-ct-primary`).value);
+            const ctSecondary = parseFloat(document.getElementById(`${relay}-ct-secondary`).value);
+            const ratio = ctPrimary / ctSecondary;
+            
+            if (direction === 'pri-to-sec') {
+                const pickupPri = parseFloat(document.getElementById(`${relay}-pickup-${type}-pri`).value);
+                document.getElementById(`${relay}-pickup-${type}-sec`).value = (pickupPri / ratio).toFixed(2);
+            } else { // sec-to-pri
+                const pickupSec = parseFloat(document.getElementById(`${relay}-pickup-${type}-sec`).value);
+                document.getElementById(`${relay}-pickup-${type}-pri`).value = Math.round(pickupSec * ratio);
+            }
+        }
+
+        // Function to generate ETAP-style curve data with area fill
+        function generateCurveData(relay, minCurrent, maxCurrent, pointCount = 200) {
+            const relayData = getRelaySettings(relay);
+            const dataPoints = [];
+            
+            // First handle IDMT curve if enabled
+            if (relayData.idmtEnabled) {
+                const pickupPrimary = relayData.pickupIDMTPri;
+                const curve = relayData.curve;
+                const multiplier = relayData.timeMultiplier;
+                const minTime = relayData.minOpTime;
+                
+                // First define the left vertical boundary (minimum current)
+                dataPoints.push({ x: pickupPrimary, y: 100 });  // Top of vertical at pickup
+                dataPoints.push({ x: pickupPrimary, y: minTime }); // Connect to the curve at min time
+                
+                // Calculate logarithmically spaced current points
+                const maxCurrentToUse = relayData.dtEnabled ? 
+                    Math.min(relayData.pickupDTPri, maxCurrent) : maxCurrent;
+                
+                const step = Math.log(maxCurrentToUse / pickupPrimary) / (pointCount - 1);
+                
+                // Add the curve points
+                for (let i = 0; i < pointCount; i++) {
+                    const current = pickupPrimary * Math.exp(step * i);
+                    if (current < pickupPrimary) continue;
+                    if (current > maxCurrentToUse) break;
+                    
+                    const tripTime = relayEquations[curve](current, pickupPrimary, multiplier, minTime);
+                    if (tripTime !== null && isFinite(tripTime)) {
+                        dataPoints.push({ x: current, y: tripTime });
+                    }
+                }
+            }
+            
+            // Add DT stage if enabled
+            if (relayData.dtEnabled) {
+                const pickupDT = relayData.pickupDTPri;
+                const opTime = relayData.opTime;
+                
+                // If IDMT is not enabled or IDMT pickup is higher than DT pickup
+                if (!relayData.idmtEnabled || (relayData.idmtEnabled && relayData.pickupIDMTPri > pickupDT)) {
+                    // Add vertical line at DT pickup
+                    dataPoints.push({ x: pickupDT, y: 100 });  // Top boundary
+                    dataPoints.push({ x: pickupDT, y: opTime }); // Connect to horizontal
+                }
+                else {
+                    // If we're coming from IDMT curve, we need a clean transition
+                    dataPoints.push({ x: pickupDT, y: opTime });
+                }
+                
+                // Horizontal line to the maximum current
+                dataPoints.push({ x: maxCurrent, y: opTime });
+                
+                // To complete the filled area ETAP style, we need to add bottom boundary
+                dataPoints.push({ x: maxCurrent, y: 0.01 }); // Bottom right corner
+                
+                // Complete back to pickup for area fill
+                if (relayData.idmtEnabled && relayData.pickupIDMTPri < pickupDT) {
+                    dataPoints.push({ x: relayData.pickupIDMTPri, y: 0.01 }); // Bottom left at IDMT pickup
+                } else {
+                    dataPoints.push({ x: pickupDT, y: 0.01 }); // Bottom left at DT pickup
+                }
+            }
+            else if (relayData.idmtEnabled) {
+                // If only IDMT is enabled, close the area
+                dataPoints.push({ x: maxCurrent, y: dataPoints[dataPoints.length - 1].y });
+                dataPoints.push({ x: maxCurrent, y: 0.01 }); // Bottom right
+                dataPoints.push({ x: relayData.pickupIDMTPri, y: 0.01 }); // Bottom left
+            }
+            
+            return dataPoints;
+        }
+
+        // Function to update the chart with curve data
+        function updateChart() {
+            const minCurrent = 10;
+            const maxCurrent = 10000;
+            
+            // Generate ETAP-style curve data for each relay
+            const upstreamData = generateCurveData('upstream', minCurrent, maxCurrent, 200);
+            const incomingData = generateCurveData('incoming', minCurrent, maxCurrent, 200);
+            const outgoing1Data = generateCurveData('outgoing1', minCurrent, maxCurrent, 200);
+            const outgoing2Data = generateCurveData('outgoing2', minCurrent, maxCurrent, 200);
+            
+            // Update chart datasets
+            relayChart.data.datasets[0].data = upstreamData;
+            relayChart.data.datasets[1].data = incomingData;
+            relayChart.data.datasets[2].data = outgoing1Data;
+            relayChart.data.datasets[3].data = outgoing2Data;
+            
+            // Clear fault point
+            relayChart.data.datasets[4].data = [];
+            
+            relayChart.update();
+        }
+        
+        // Calculate and display trip times for a given fault current
+        function calculateTrips() {
+            const faultCurrent = parseFloat(document.getElementById('fault-current').value);
+            
+            // Calculate trip times for each relay
+            const upstreamTripTime = calculateTripTime('upstream', faultCurrent);
+            const incomingTripTime = calculateTripTime('incoming', faultCurrent);
+            const outgoing1TripTime = calculateTripTime('outgoing1', faultCurrent);
+            const outgoing2TripTime = calculateTripTime('outgoing2', faultCurrent);
+            
+            // Find the fastest trip time
+            const fastestTrip = Math.min(
+                isFinite(upstreamTripTime) ? upstreamTripTime : Infinity,
+                isFinite(incomingTripTime) ? incomingTripTime : Infinity,
+                isFinite(outgoing1TripTime) ? outgoing1TripTime : Infinity,
+                isFinite(outgoing2TripTime) ? outgoing2TripTime : Infinity
+            );
+            
+            // Display trip times
+            const upstreamElement = document.getElementById('upstream-trip-time');
+            const incomingElement = document.getElementById('incoming-trip-time');
+            const outgoing1Element = document.getElementById('outgoing1-trip-time');
+            const outgoing2Element = document.getElementById('outgoing2-trip-time');
+            
+            upstreamElement.textContent = isFinite(upstreamTripTime) ? upstreamTripTime.toFixed(3) + ' s' : 'N/A';
+            incomingElement.textContent = isFinite(incomingTripTime) ? incomingTripTime.toFixed(3) + ' s' : 'N/A';
+            outgoing1Element.textContent = isFinite(outgoing1TripTime) ? outgoing1TripTime.toFixed(3) + ' s' : 'N/A';
+            outgoing2Element.textContent = isFinite(outgoing2TripTime) ? outgoing2TripTime.toFixed(3) + ' s' : 'N/A';
+            
+            // Highlight the fastest trip time
+            upstreamElement.style.backgroundColor = '';
+            incomingElement.style.backgroundColor = '';
+            outgoing1Element.style.backgroundColor = '';
+            outgoing2Element.style.backgroundColor = '';
+            
+            if (isFinite(fastestTrip)) {
+                if (fastestTrip === upstreamTripTime) {
+                    upstreamElement.style.backgroundColor = '#FFECB3';
+                } else if (fastestTrip === incomingTripTime) {
+                    incomingElement.style.backgroundColor = '#FFECB3';
+                } else if (fastestTrip === outgoing1TripTime) {
+                    outgoing1Element.style.backgroundColor = '#FFECB3';
+                } else if (fastestTrip === outgoing2TripTime) {
+                    outgoing2Element.style.backgroundColor = '#FFECB3';
+                }
+                
+                // Add fault point to chart
+                relayChart.data.datasets[4].data = [{ x: faultCurrent, y: fastestTrip }];
+            } else {
+                relayChart.data.datasets[4].data = [];
+            }
+            
+            relayChart.update();
+        }
+        
+        // Function to toggle input fields based on enabled/disabled toggles
+        function toggleInputFields() {
+            const relays = ['upstream', 'incoming', 'outgoing1', 'outgoing2'];
+            
+            relays.forEach(relay => {
+                const idmtEnabled = document.getElementById(`${relay}-idmt-enabled`).checked;
+                const dtEnabled = document.getElementById(`${relay}-dt-enabled`).checked;
+                
+                // Toggle IDMT stage fields
+                document.getElementById(`${relay}-pickup-idmt-pri`).disabled = !idmtEnabled;
+                document.getElementById(`${relay}-pickup-idmt-sec`).disabled = !idmtEnabled;
+                document.getElementById(`${relay}-time-multiplier`).disabled = !idmtEnabled;
+                document.getElementById(`${relay}-min-op-time`).disabled = !idmtEnabled;
+                document.getElementById(`${relay}-sync-idmt`).disabled = !idmtEnabled;
+                
+                // Toggle DT stage fields
+                document.getElementById(`${relay}-pickup-dt-pri`).disabled = !dtEnabled;
+                document.getElementById(`${relay}-pickup-dt-sec`).disabled = !dtEnabled;
+                document.getElementById(`${relay}-op-time`).disabled = !dtEnabled;
+                document.getElementById(`${relay}-sync-dt`).disabled = !dtEnabled;
+            });
+            
+            // Update chart after toggling
+            updateChart();
+        }
+        
+        // Function to handle tab switching
+        function setupTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const targetTab = tab.getAttribute('data-tab');
+                    
+                    // Deactivate all tabs and contents
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Activate clicked tab and its content
+                    tab.classList.add('active');
+                    document.getElementById(`${targetTab}-tab`).classList.add('active');
+                });
+            });
+        }
+        
+        // Function to reset all settings to default values
+        function resetSettings() {
+            // Reset curve types - based on provided image
+            document.getElementById('upstream-curve').value = 'IEC E.INV';
+            document.getElementById('incoming-curve').value = 'IEC V.INV';
+            document.getElementById('outgoing1-curve').value = 'IEC V.INV';
+            document.getElementById('outgoing2-curve').value = 'IEC V.INV';
+            
+            // Reset IDMT settings - based on provided image
+            // Enable IDMT for all relays
+            document.getElementById('upstream-idmt-enabled').checked = true;
+            document.getElementById('incoming-idmt-enabled').checked = true;
+            document.getElementById('outgoing1-idmt-enabled').checked = true;
+            document.getElementById('outgoing2-idmt-enabled').checked = true;
+            
+            // Time multipliers
+            document.getElementById('upstream-time-multiplier').value = 0.2;
+            document.getElementById('incoming-time-multiplier').value = 2;
+            document.getElementById('outgoing1-time-multiplier').value = 0.15;
+            document.getElementById('outgoing2-time-multiplier').value = 0.15;
+            
+            // Min operation time
+            document.getElementById('upstream-min-op-time').value = 0.1;
+            document.getElementById('incoming-min-op-time').value = 0.8;
+            document.getElementById('outgoing1-min-op-time').value = 0.04;
+            document.getElementById('outgoing2-min-op-time').value = 0.04;
+            
+            // Reset pickup values - based on provided image
+            // IDMT Primary & Secondary values
+            document.getElementById('upstream-pickup-idmt-pri').value = 1000;
+            document.getElementById('upstream-pickup-idmt-sec').value = 2;
+            
+            document.getElementById('incoming-pickup-idmt-pri').value = 450;
+            document.getElementById('incoming-pickup-idmt-sec').value = 0.9;
+            
+            document.getElementById('outgoing1-pickup-idmt-pri').value = 3000;
+            document.getElementById('outgoing1-pickup-idmt-sec').value = 5;
+            
+            document.getElementById('outgoing2-pickup-idmt-pri').value = 3000;
+            document.getElementById('outgoing2-pickup-idmt-sec').value = 5;
+            
+            // Reset DT settings - based on provided image
+            // Enable DT for all relays
+            document.getElementById('upstream-dt-enabled').checked = true;
+            document.getElementById('incoming-dt-enabled').checked = true;
+            document.getElementById('outgoing1-dt-enabled').checked = true;
+            document.getElementById('outgoing2-dt-enabled').checked = true;
+            
+            // DT Primary & Secondary values
+            document.getElementById('upstream-pickup-dt-pri').value = 2250;
+            document.getElementById('upstream-pickup-dt-sec').value = 4.5;
+            
+            document.getElementById('incoming-pickup-dt-pri').value = 1250;
+            document.getElementById('incoming-pickup-dt-sec').value = 2.5;
+            
+            document.getElementById('outgoing1-pickup-dt-pri').value = 60;
+            document.getElementById('outgoing1-pickup-dt-sec').value = 0.1;
+            
+            document.getElementById('outgoing2-pickup-dt-pri').value = 60;
+            document.getElementById('outgoing2-pickup-dt-sec').value = 0.1;
+            
+            // Operation Times
+            document.getElementById('upstream-op-time').value = 0.08;
+            document.getElementById('incoming-op-time').value = 0.8;
+            document.getElementById('outgoing1-op-time').value = 0.015;
+            document.getElementById('outgoing2-op-time').value = 0.015;
+            
+            // Reset CT ratios - based on provided image
+            document.getElementById('upstream-ct-primary').value = 500;
+            document.getElementById('upstream-ct-secondary').value = 1;
+            
+            document.getElementById('incoming-ct-primary').value = 500;
+            document.getElementById('incoming-ct-secondary').value = 1;
+            
+            document.getElementById('outgoing1-ct-primary').value = 600;
+            document.getElementById('outgoing1-ct-secondary').value = 1;
+            
+            document.getElementById('outgoing2-ct-primary').value = 600;
+            document.getElementById('outgoing2-ct-secondary').value = 1;
+            
+            // Reset fault current - based on provided image
+            document.getElementById('fault-current').value = 1300;
+            
+            // Update UI and chart
+            toggleInputFields();
+            updateChart();
+            calculateTrips();
+        }
+        
+        // Function to reset chart zoom
+        function resetZoom() {
+            relayChart.resetZoom();
+        }
+        
+        // Function to setup event listeners
+        function setupEventListeners() {
+            const relays = ['upstream', 'incoming', 'outgoing1', 'outgoing2'];
+            
+            // Toggle event listeners
+            relays.forEach(relay => {
+                document.getElementById(`${relay}-idmt-enabled`).addEventListener('change', toggleInputFields);
+                document.getElementById(`${relay}-dt-enabled`).addEventListener('change', toggleInputFields);
+                
+                // Sync buttons for primary/secondary
+                document.getElementById(`${relay}-sync-idmt`).addEventListener('click', () => {
+                    syncValues(relay, 'idmt', 'sec-to-pri');
+                    updateChart();
+                });
+                
+                document.getElementById(`${relay}-sync-dt`).addEventListener('click', () => {
+                    syncValues(relay, 'dt', 'sec-to-pri');
+                    updateChart();
+                });
+                
+                // Input change listeners for all fields
+                const inputs = [
+                    `${relay}-curve`, 
+                    `${relay}-pickup-idmt-pri`, `${relay}-pickup-idmt-sec`,
+                    `${relay}-time-multiplier`, `${relay}-min-op-time`, 
+                    `${relay}-pickup-dt-pri`, `${relay}-pickup-dt-sec`,
+                    `${relay}-op-time`, `${relay}-ct-primary`, `${relay}-ct-secondary`
+                ];
+                
+                inputs.forEach(input => {
+                    document.getElementById(input).addEventListener('change', () => {
+                        // Call updateChart only for this specific relay
+                        updateChart();
+                    });
+                });
+                
+                // Auto-sync primary to secondary when primary changes, but only for this relay
+                document.getElementById(`${relay}-pickup-idmt-pri`).addEventListener('input', () => {
+                    syncValues(relay, 'idmt', 'pri-to-sec');
+                });
+                
+                document.getElementById(`${relay}-pickup-dt-pri`).addEventListener('input', () => {
+                    syncValues(relay, 'dt', 'pri-to-sec');
+                });
+                
+                // Auto-sync when CT ratio changes, but only for this relay
+                document.getElementById(`${relay}-ct-primary`).addEventListener('change', () => {
+                    syncValues(relay, 'idmt', 'pri-to-sec');
+                    syncValues(relay, 'dt', 'pri-to-sec');
+                    updateChart();
+                });
+                
+                document.getElementById(`${relay}-ct-secondary`).addEventListener('change', () => {
+                    syncValues(relay, 'idmt', 'pri-to-sec');
+                    syncValues(relay, 'dt', 'pri-to-sec');
+                    updateChart();
+                });
+            });
+            
+            // Calculate trip times button
+            document.getElementById('calculate-btn').addEventListener('click', calculateTrips);
+            
+            // Reset settings button
+            document.getElementById('reset-btn').addEventListener('click', resetSettings);
+            
+            // Reset zoom button
+            document.getElementById('reset-zoom-btn').addEventListener('click', resetZoom);
+        }
+        
+        // Initialize Chart.js
+        let relayChart;
+        function initChart() {
+            const ctx = document.getElementById('relay-chart').getContext('2d');
+            
+            relayChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Upstream Relay',
+                            borderColor: '#0066CC',
+                            backgroundColor: 'rgba(0, 102, 204, 0.2)',
+                            data: [],
+                            fill: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            stepped: false,
+                            tension: 0,
+                            order: 4
+                        },
+                        {
+                            label: 'Incoming Relay',
+                            borderColor: '#009933',
+                            backgroundColor: 'rgba(0, 153, 51, 0.2)',
+                            data: [],
+                            fill: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            stepped: false,
+                            tension: 0,
+                            order: 3
+                        },
+                        {
+                            label: 'Outgoing 1 Relay',
+                            borderColor: '#CC0000',
+                            backgroundColor: 'rgba(204, 0, 0, 0.2)',
+                            data: [],
+                            fill: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            stepped: false,
+                            tension: 0,
+                            order: 2
+                        },
+                        {
+                            label: 'Outgoing 2 Relay',
+                            borderColor: '#FF6600',
+                            backgroundColor: 'rgba(255, 102, 0, 0.2)',
+                            data: [],
+                            fill: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            stepped: false,
+                            tension: 0,
+                            order: 1
+                        },
+                        {
+                            label: 'Fault Point',
+                            borderColor: '#000000',
+                            backgroundColor: '#FF0000',
+                            data: [],
+                            fill: false,
+                            pointRadius: 7,
+                            pointStyle: 'rect',
+                            borderWidth: 1,
+                            showLine: false,
+                            order: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        x: {
+                            type: 'logarithmic',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Current (A)',
+                                font: {
+                                    weight: 'bold',
+                                    size: 14
+                                }
+                            },
+                            min: 10,
+                            max: 10000,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                borderColor: 'rgba(0, 0, 0, 0.4)',
+                                tickColor: 'rgba(0, 0, 0, 0.4)',
+                                borderWidth: 1,
+                                drawOnChartArea: true,
+                                drawTicks: true
+                            },
+                            ticks: {
+                                autoSkip: false,
+                                callback: function(value) {
+                                    // Shows only major tick values for cleaner display
+                                    if ([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 
+                                         200, 300, 400, 500, 600, 700, 800, 900, 1000, 
+                                         2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000].includes(value)) {
+                                        return value;
+                                    }
+                                    return '';
+                                },
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'logarithmic',
+                            title: {
+                                display: true,
+                                text: 'Time (s)',
+                                font: {
+                                    weight: 'bold',
+                                    size: 14
+                                }
+                            },
+                            min: 0.01,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                borderColor: 'rgba(0, 0, 0, 0.4)',
+                                tickColor: 'rgba(0, 0, 0, 0.4)',
+                                borderWidth: 1,
+                                drawOnChartArea: true,
+                                drawTicks: true
+                            },
+                            ticks: {
+                                autoSkip: false,
+                                callback: function(value) {
+                                    // Shows only major tick values for cleaner display
+                                    if ([0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 
+                                         0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 
+                                         2, 3, 4, 5, 6, 7, 8, 9, 10, 
+                                         20, 30, 40, 50, 60, 70, 80, 90, 100].includes(value)) {
+                                        return value;
+                                    }
+                                    return '';
+                                },
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            tension: 0 // straight lines between points
+                        }
+                    },
+                    plugins: {
+                        background: {
+                            color: 'white'
+                        },
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 20,
+                                padding: 15,
+                                font: {
+                                    size: 13,
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            titleColor: '#000',
+                            bodyColor: '#000',
+                            titleFont: {
+                                weight: 'bold'
+                            },
+                            borderColor: '#666',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += `Current: ${context.parsed.x.toFixed(1)} A, Time: ${context.parsed.y.toFixed(2)} s`;
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'xy',
+                                speed: 100
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                speed: 100
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize the application
+        function initApp() {
+            // Set up tabs
+            setupTabs();
+            
+            // Initialize chart
+            initChart();
+            
+            // Set up event listeners
+            setupEventListeners();
+            
+            // Apply default values from provided image
+            resetSettings();
+            
+            // Toggle input fields based on initial state
+            toggleInputFields();
+            
+            // Update chart with initial data
+            updateChart();
+            
+            // Calculate initial trip times
+            calculateTrips();
+        }
+        
+        // Start the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
